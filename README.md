@@ -37,11 +37,12 @@ Download and install Terraform from the [Terraform website](https://www.terrafor
 Create a file named `main.tf` and add the following configuration:
 
 ```hcl
+# Specify the AWS provider and region
 provider "aws" {
   region = "us-west-2"
 }
 
-# S3 Bucket for Terraform State
+# Create an S3 bucket to store Terraform state
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "your-terraform-state-bucket"
   versioning {
@@ -49,7 +50,7 @@ resource "aws_s3_bucket" "terraform_state" {
   }
 }
 
-# DynamoDB Table for State Locking
+# Create a DynamoDB table for state locking to prevent concurrent modifications
 resource "aws_dynamodb_table" "terraform_locks" {
   name         = "your-terraform-lock-table"
   billing_mode = "PAY_PER_REQUEST"
@@ -61,6 +62,7 @@ resource "aws_dynamodb_table" "terraform_locks" {
   }
 }
 
+# Configure Terraform backend to use S3 and DynamoDB
 terraform {
   backend "s3" {
     bucket         = "your-terraform-state-bucket"
@@ -71,7 +73,7 @@ terraform {
   }
 }
 
-# IAM Role for EC2
+# Create an IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "ec2-role"
 
@@ -89,45 +91,53 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
+# Attach the necessary policy to the IAM role
 resource "aws_iam_role_policy_attachment" "ec2_attach" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
 }
 
+# Create an instance profile for the IAM role
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   name = "ec2_instance_profile"
   role = aws_iam_role.ec2_role.name
 }
 
-# VPC and Networking Components
+# Create a VPC
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
 
+# Create a subnet within the VPC
 resource "aws_subnet" "subnet" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.1.0/24"
 }
 
+# Create an internet gateway for the VPC
 resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.main.id
 }
 
+# Create a route table for the VPC
 resource "aws_route_table" "routetable" {
   vpc_id = aws_vpc.main.id
 }
 
+# Create a route in the route table
 resource "aws_route" "route" {
   route_table_id         = aws_route_table.routetable.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.gw.id
 }
 
+# Associate the route table with the subnet
 resource "aws_route_table_association" "a" {
   subnet_id      = aws_subnet.subnet.id
   route_table_id = aws_route_table.routetable.id
 }
 
+# Create a security group to allow SSH access
 resource "aws_security_group" "allow_ssh" {
   vpc_id = aws_vpc.main.id
 
@@ -166,6 +176,7 @@ terraform apply -auto-approve
 Add the following to `main.tf`:
 
 ```hcl
+# Create an EC2 instance for Jenkins
 resource "aws_instance" "jenkins" {
   ami           = "ami-0c55b159cbfafe1f0" # Amazon Linux 2 AMI
   instance_type = "t2.micro"
@@ -173,10 +184,12 @@ resource "aws_instance" "jenkins" {
   iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
   security_groups = [aws_security_group.allow_ssh.name]
 
+  # Use spot instances to reduce costs
   instance_market_options {
     market_type = "spot"
   }
 
+  # User data to install Jenkins
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -199,6 +212,7 @@ resource "aws_instance" "jenkins" {
 Add the following to `main.tf`:
 
 ```hcl
+# Create an EC2 instance for Grafana
 resource "aws_instance" "grafana" {
   ami           = "ami-0c55b159cbfafe1f0" # Amazon Linux 2 AMI
   instance_type = "t2.micro"
@@ -206,10 +220,12 @@ resource "aws_instance" "grafana" {
   iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
   security_groups = [aws_security_group.allow_ssh.name]
 
+  # Use spot instances to reduce costs
   instance_market_options {
     market_type = "spot"
   }
 
+  # User data to install Grafana
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -237,6 +253,7 @@ resource "aws_instance" "grafana" {
 Add the following to `main.tf`:
 
 ```hcl
+# Create an EC2 instance for Prometheus
 resource "aws_instance" "prometheus" {
   ami           = "ami-0c55b159cbfafe1f0" # Amazon Linux 2 AMI
   instance_type = "t2.micro"
@@ -244,10 +261,12 @@ resource "aws_instance" "prometheus" {
   iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
   security_groups = [aws_security_group.allow_ssh.name]
 
+  # Use spot instances to reduce costs
   instance_market_options {
     market_type = "spot"
   }
 
+  # User data to install Prometheus
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -259,7 +278,9 @@ resource "aws_instance" "prometheus" {
               cp -r prometheus-2.27.1.linux-amd64/console_libraries /etc/prometheus/
               cp prometheus-2.27.1.linux-amd64/prometheus.yml /etc/prometheus/prometheus.yml
               useradd --no-create-home --shell /bin/false prometheus
-              mkdir /var/lib/prometheus
+              mkdir /var/lib
+
+/prometheus
               chown prometheus:prometheus /var/lib/prometheus
               cat <<EOT > /etc/systemd/system/prometheus.service
               [Unit]
@@ -285,9 +306,7 @@ resource "aws_instance" "prometheus" {
               systemctl enable prometheus
               EOF
 
-  tags
-
- = {
+  tags = {
     Name = "prometheus-instance"
   }
 }
@@ -298,6 +317,7 @@ resource "aws_instance" "prometheus" {
 Add the following to `main.tf`:
 
 ```hcl
+# Create an EC2 instance for Kibana
 resource "aws_instance" "kibana" {
   ami           = "ami-0c55b159cbfafe1f0" # Amazon Linux 2 AMI
   instance_type = "t2.micro"
@@ -305,10 +325,12 @@ resource "aws_instance" "kibana" {
   iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
   security_groups = [aws_security_group.allow_ssh.name]
 
+  # Use spot instances to reduce costs
   instance_market_options {
     market_type = "spot"
   }
 
+  # User data to install Kibana
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -334,7 +356,7 @@ resource "aws_instance" "kibana" {
 }
 ```
 
-### Apply the Terraform Configuration Part 2
+### Apply the Terraform Configuration AGAIN ugh
 
 ```sh
 terraform apply -auto-approve
@@ -470,48 +492,104 @@ Update Prometheus configuration (`prometheus.yml`):
 
 ```yaml
 scrape_configs:
+  - job_name: 'node_exporter'
+    ec2_sd_configs:
+      - region: us-west-2
+        access_key: '<AWS_ACCESS_KEY>'
+        secret_key: '<AWS_SECRET_KEY>'
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        regex: node-exporter-instance-.*
+        action: keep
   - job_name: 'cloudwatch_exporter'
     static_configs:
       - targets: ['<cloudwatch_exporter_host>:9106']
+  - job_name: 'jenkins'
+    static_configs:
+      - targets: ['<jenkins_host>:<jenkins_metrics_port>']
 ```
 
 ### Create Grafana Dashboard for Cost Tracking
 
 1. **Add Prometheus as a Data Source**:
-   - Configure Grafana to use Prometheus as a data source.
+   - Go to Grafana > Configuration > Data Sources > Add data source.
+   - Select Prometheus and configure it with your Prometheus server URL.
 
-2. **Create Dashboard Panels**:
-   - **Panel 1**: Total AWS Cost
-     - Query: `aws_billing_estimatedcharges_maximum{currency="USD"}`
-     - Visualization: Single Stat
+2. **Create Dashboards and Panels**:
 
-   - **Panel 2**: Cost by Service
-     - Query: `aws_billing_estimatedcharges_maximum{currency="USD"}`
-     - Visualization: Bar Chart
-     - Group by: Service
+#### Infrastructure Metrics Dashboard
 
-### Monitoring CI/CD Pipeline Metrics
-
-1. **Jenkins Metrics**:
-   - Use the Prometheus plugin for Jenkins to expose CI/CD metrics.
-   - Add Prometheus scrape configuration for Jenkins metrics.
-
-### Visualizing CI/CD Metrics in Grafana
-
-1. **Add Prometheus as a Data Source**:
-   - Configure Grafana to use Prometheus as a data source.
-
-2. **Create Dashboards for CI/CD Metrics**:
-   - Create dashboards to track job duration, failure rates, and other relevant metrics.
-
-### Example Dashboard Panels
-
-- **Panel 1**: Job Duration
-  - Query: `job_duration_seconds`
+- **Panel 1**: CPU Usage
+  - Query: `avg(rate(node_cpu_seconds_total{mode!="idle"}[5m])) by (instance)`
   - Visualization: Line Chart
 
-- **Panel 2**: Job Failure Rate
-  - Query: `job_failure_rate`
+- **Panel 2**: Memory Usage
+  - Query: `node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100`
+  - Visualization: Line Chart
+
+- **Panel 3**: Disk I/O
+  - Query: `rate(node_disk_io_time_seconds_total[5m])`
   - Visualization: Bar Chart
 
-By following these steps, you can set up a comprehensive CI/CD and observability lab environment on AWS. This guide ensures that you automate as much as possible using Terraform and the command line, and track costs and performance metrics using Prometheus and Grafana.
+- **Panel 4**: Network Traffic
+  - Query: `rate(node_network_receive_bytes_total[5m])` and `rate(node_network_transmit_bytes_total[5m])`
+  - Visualization: Line Chart
+
+#### Application Metrics Dashboard
+
+- **Panel 1**: Application Response Time
+  - Query: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))`
+  - Visualization: Heatmap
+
+- **Panel 2**: Error Rates
+  - Query: `sum(rate(http_requests_total{status=~"5.."}[5m])) by (instance)`
+  - Visualization: Bar Chart
+
+- **Panel 3**: Request Rates
+  - Query: `sum(rate(http_requests_total[5m])) by (instance)`
+  - Visualization: Line Chart
+
+#### CI/CD Metrics Dashboard
+
+- **Panel 1**: Job Duration
+  - Query: `avg(jenkins_job_duration_seconds) by (job)`
+  - Visualization: Line Chart
+
+- **Panel 2**: Job Failure Rates
+  - Query: `sum(jenkins_job_last_build_result == 2) by (job)`
+  - Visualization: Bar Chart
+
+- **Panel 3**: Time to Resolve Failed Jobs
+  - Query: `avg(time() - jenkins_job_last_build_timestamp_seconds) by (job)`
+  - Visualization: Heatmap
+
+- **Panel 4**: Deployment Frequency
+  - Query: `count(jenkins_job_last_build_result == 0) by (job)`
+  - Visualization: Line Chart
+
+#### Cost Metrics Dashboard
+
+- **Panel 1**: Total AWS Cost
+  - Query: `aws_billing_estimatedcharges_maximum{currency="USD"}`
+  - Visualization: Single Stat
+
+- **Panel 2**: Cost by Service
+  - Query: `aws_billing_estimatedcharges_maximum{currency="USD"}`
+  - Visualization: Bar Chart
+  - Group by: Service
+
+#### Logs Dashboard
+
+- **Panel 1**: System Logs
+  - Query: Logs from `node_exporter`
+  - Visualization: Logs
+
+- **Panel 2**: Application Logs
+  - Query: Logs from your application
+  - Visualization: Logs
+
+- **Panel 3**: CI/CD Pipeline Logs
+  - Query: Jenkins pipeline logs
+  - Visualization: Logs
+
+By following these steps, you can set up comprehensive monitoring and logging for your infrastructure. This setup will provide valuable insights into the performance and health of your systems and applications, helping you identify and resolve issues more efficiently
